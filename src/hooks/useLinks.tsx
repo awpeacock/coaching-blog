@@ -1,12 +1,16 @@
+import { createClient } from 'contentful';
 import type { ReactElement } from 'react';
 import { Link, useLocation, type LinkProps } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 
-import pages from '../data/pages.json';
-
 export type MenuLinks = Array<ReactElement<LinkProps> | null>;
 
 export type LinkType = 'header' | 'footer' | 'side';
+
+const client = createClient({
+	space: import.meta.env.VITE_CONTENTFUL_SPACE_ID,
+	accessToken: import.meta.env.VITE_CONTENTFUL_DELIVERY_TOKEN,
+});
 
 export const useLinks = (type: LinkType): MenuLinks => {
 	const { pathname } = useLocation();
@@ -15,8 +19,19 @@ export const useLinks = (type: LinkType): MenuLinks => {
 		useQuery({
 			queryKey: ['pages'],
 			queryFn: async () => {
-				const all = pages;
-				return all.filter((p) => p.url !== 'home');
+				const response = await client.getEntries({
+					content_type: 'blog-post',
+					select: ['sys.id', 'fields.title', 'fields.url'],
+					order: ['-sys.createdAt'],
+				});
+
+				return response.items
+					.map((entry) => ({
+						id: entry.sys.id,
+						title: entry.fields.title as string,
+						url: entry.fields.url as string,
+					}))
+					.filter((p) => p.url !== 'home');
 			},
 		}).data ?? [];
 
@@ -37,7 +52,7 @@ export const useLinks = (type: LinkType): MenuLinks => {
 	const next = index < keys.length - 1 ? list[index + 1] : null;
 	links.push(
 		prev ? (
-			<Link key={prev.url} to={'/' + prev.url}>
+			<Link key={'prev'} to={'/' + prev.url}>
 				Previous: {prev.title}
 			</Link>
 		) : null,
@@ -51,7 +66,7 @@ export const useLinks = (type: LinkType): MenuLinks => {
 	}
 	links.push(
 		next ? (
-			<Link key={next.url} to={'/' + next.url}>
+			<Link key={'next'} to={'/' + next.url}>
 				Next: {next.title}
 			</Link>
 		) : null,

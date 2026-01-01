@@ -4,6 +4,8 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import './index.css';
+import 'react-loading-skeleton/dist/skeleton.css';
+
 import './i18n/config';
 
 import { Homepage } from './components/Homepage.tsx';

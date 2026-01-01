@@ -121,6 +121,11 @@ footer ul li {
 	width: 100%;
 }
 
+.error {
+	color: #800;
+	font-weight: 500;
+}
+
 .hamburger {
 	width: 2rem;
 	height: 2rem;
@@ -142,6 +147,10 @@ footer ul li {
 	background-color: #fff;
 	transform-origin: 1px;
 	transition: all 0.3s linear;
+}
+
+footer > div > a {
+	margin-left: auto;
 }
 
 img.home {
@@ -187,11 +196,11 @@ img.home {
 		justify-content: center;
 	}
 
-	header li:first-of-type {
+	header li.prev {
 		justify-content: left;
 	}
 
-	header li:last-of-type {
+	header li.next {
 		justify-content: right;
 	}
 

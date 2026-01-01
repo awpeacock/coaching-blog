@@ -1,7 +1,7 @@
 {
 	"name": "coaching-blog",
 	"private": true,
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"type": "module",
 	"scripts": {
 		"setup": "npx tsx scripts/contentful.ts",
@@ -12,11 +12,13 @@
 	},
 	"dependencies": {
 		"@tanstack/react-query": "^5.90.12",
+		"contentful": "^11.10.1",
 		"contentful-management": "^11.66.0",
 		"i18next": "^25.7.3",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
 		"react-i18next": "^16.5.0",
+		"react-loading-skeleton": "^3.5.0",
 		"react-router": "^7.10.1"
 	},
 	"devDependencies": {

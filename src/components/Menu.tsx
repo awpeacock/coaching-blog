@@ -21,7 +21,9 @@ export const Menu = (props: MenuProps) => {
 				.filter((link) => link !== null)
 				.filter((link) => link || type !== 'footer')
 				.map((link) => (
-					<li key={link.key}>{link}</li>
+					<li key={link.key} className={link.key!}>
+						{link}
+					</li>
 				))}
 		</ul>
 	);
@@ -35,14 +37,16 @@ export const Menu = (props: MenuProps) => {
 				<footer>
 					{visible && list}
 					<div>
-						<button
-							className="hamburger"
-							onClick={() => setVisible(!visible)}
-						>
-							<div className="burger" />
-							<div className="burger" />
-							<div className="burger" />
-						</button>
+						{links.some((link) => link !== null) && (
+							<button
+								className="hamburger"
+								onClick={() => setVisible(!visible)}
+							>
+								<div className="burger" />
+								<div className="burger" />
+								<div className="burger" />
+							</button>
+						)}
 						<Link to="/">
 							<img
 								src="home.svg"

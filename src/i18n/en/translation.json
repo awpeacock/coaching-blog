@@ -1,4 +1,18 @@
 {
 	"title": "On The Sidelines",
-	"home": "Home button"
+	"home": "Home button",
+	"error": "Something went wrong trying to retrieve that content.  Please try again later.",
+	"404": "Sorry, but we could not find that page.",
+	"january": "January",
+	"february": "February",
+	"march": "March",
+	"april": "April",
+	"may": "May",
+	"june": "June",
+	"july": "July",
+	"august": "August",
+	"september": "September",
+	"october": "October",
+	"november": "November",
+	"december": "December"
 }
