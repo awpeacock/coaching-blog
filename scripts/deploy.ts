@@ -1,4 +1,8 @@
 import {
+	CloudFrontClient,
+	CreateInvalidationCommand,
+} from '@aws-sdk/client-cloudfront';
+import {
 	S3Client,
 	PutObjectCommand,
 	ListObjectsV2Command,
@@ -60,14 +64,27 @@ const upload = async (s3: S3Client, bucket: string, directory: string) => {
 	}
 };
 
+const clearCache = async (cf: CloudFrontClient, id: string) => {
+	await cf.send(
+		new CreateInvalidationCommand({
+			DistributionId: id,
+			InvalidationBatch: {
+				CallerReference: `${Date.now()}`,
+				Paths: { Quantity: 1, Items: ['/*'] },
+			},
+		}),
+	);
+};
+
 heading('Uploading React site to S3');
 
 const config = {
 	region: process.env.AWS_REGION,
 	project: process.env.AWS_PROJECT_NAME ?? 'BLOG',
+	cloudfront: process.env.CLOUDFRONT_DISTRIBUTION_ID,
 };
 
-if (!config.region || !config.project) {
+if (!config.region || !config.project || !config.cloudfront) {
 	fail('Missing environment variables. Check .env or GitHub secrets.');
 }
 
@@ -87,3 +104,10 @@ log('Uploading new build...');
 await upload(s3, bucket, 'dist');
 
 success('S3 bucket successfully updated');
+
+const cf = new CloudFrontClient({ region: config.region });
+info(`CloudFront Distribution ID: ${config.cloudfront}`);
+
+await clearCache(cf, config.cloudfront!);
+
+success('CloudFront Cache cleared');

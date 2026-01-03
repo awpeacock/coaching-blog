@@ -6,7 +6,7 @@ At present, content is retrieved via Contentful (headless CMS), with a locally s
 
 ## Status
 
-This project is in an early prototype phase - static content is built and deployed to S3.
+This project is in an early prototype phase - static content is built and deployed to S3, and made publicly accessible by CloudFront.
 
 ## Setup
 
@@ -88,4 +88,4 @@ npm run deploy
 
 > The deployment script clears the bucket before upload and ensures correct MIME types.
 
-> Note: In order to test the site in its current state, the S3 bucket must temporarily allow public read. In production, it will be private and served through CloudFront.
+> The deployment script will read the generated values from the CloudFront generation and output the publicly accessible domain. You can use this value to preview the site.

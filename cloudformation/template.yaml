@@ -17,3 +17,70 @@ Resources:
             WebsiteConfiguration:
                 IndexDocument: index.html
                 ErrorDocument: index.html
+            PublicAccessBlockConfiguration:
+                BlockPublicAcls: true
+                BlockPublicPolicy: true
+                IgnorePublicAcls: true
+                RestrictPublicBuckets: true
+
+    WebsiteBucketOAC:
+        Type: AWS::CloudFront::OriginAccessControl
+        Properties:
+            OriginAccessControlConfig:
+                Name: !Sub '${ProjectName}-OAC'
+                Description: Access control for CloudFront to S3
+                SigningBehavior: always
+                SigningProtocol: sigv4
+                OriginAccessControlOriginType: s3
+
+    WebsiteBucketPolicy:
+        Type: AWS::S3::BucketPolicy
+        Properties:
+            Bucket: !Ref WebsiteBucket
+            PolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Sid: AllowCloudFrontServicePrincipal
+                      Effect: Allow
+                      Principal:
+                          Service: cloudfront.amazonaws.com
+                      Action: s3:GetObject
+                      Resource: !Sub '${WebsiteBucket.Arn}/*'
+
+    WebsiteDistribution:
+        Type: AWS::CloudFront::Distribution
+        Properties:
+            DistributionConfig:
+                Enabled: true
+                DefaultRootObject: index.html
+                Origins:
+                    - Id: !Sub '${ProjectName}-S3Origin'
+                      DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+                      S3OriginConfig: {}
+                      OriginAccessControlId: !Ref WebsiteBucketOAC
+                DefaultCacheBehavior:
+                    TargetOriginId: !Sub '${ProjectName}-S3Origin'
+                    ViewerProtocolPolicy: redirect-to-https
+                    AllowedMethods:
+                        - GET
+                        - HEAD
+                    CachedMethods:
+                        - GET
+                        - HEAD
+                    Compress: true
+                    ForwardedValues:
+                        QueryString: false
+                        Cookies:
+                            Forward: none
+                ViewerCertificate:
+                    CloudFrontDefaultCertificate: true
+                PriceClass: PriceClass_100
+
+Outputs:
+    CloudFrontDistributionId:
+        Description: 'The ID of the CloudFront distribution'
+        Value: !Ref WebsiteDistribution
+
+    CloudFrontDomainName:
+        Description: 'The domain name of the CloudFront distribution'
+        Value: !GetAtt WebsiteDistribution.DomainName

@@ -1,7 +1,7 @@
 {
 	"name": "coaching-blog",
 	"private": true,
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"type": "module",
 	"scripts": {
 		"setup": "npm run setup:cms && npm run setup:aws",
@@ -26,6 +26,7 @@
 	},
 	"devDependencies": {
 		"@aws-sdk/client-cloudformation": "^3.962.0",
+		"@aws-sdk/client-cloudfront": "^3.962.0",
 		"@aws-sdk/client-s3": "^3.962.0",
 		"@aws-sdk/client-sts": "^3.962.0",
 		"@eslint/js": "^9.39.1",
