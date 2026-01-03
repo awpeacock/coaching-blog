@@ -9,33 +9,9 @@ import dotenv from 'dotenv';
 import * as fs from 'node:fs';
 import path from 'node:path';
 
-dotenv.config();
+import { heading, info, log, success, warn, fail } from './funcs';
 
-const heading = (msg: string) => {
-	console.log('\x1b[1m' + msg + '\x1b[0m');
-};
-const info = (msg: string) => {
-	console.log('\x1b[1m\x1b[34m\u2139\x1b[0m ' + msg);
-};
-const log = (msg: string) => {
-	console.log(msg);
-};
-const success = (msg: string) => {
-	console.log('\x1b[1m\x1b[32m\u2713\x1b[0m ' + msg);
-};
-const warn = (msg: string) => {
-	console.error('\x1b[33m' + msg + '\x1b[0m');
-};
-const fail = (msg: string, err?: Error) => {
-	if (err) {
-		console.error(
-			'\x1b[1m\x1b[31m\u2718\x1b[0m ' + msg + ' - ' + err.message,
-		);
-	} else {
-		console.error('\x1b[1m\x1b[31m\u2718\x1b[0m ' + msg);
-	}
-	process.exit(1);
-};
+dotenv.config();
 
 const resolveSpace = async (client: ClientAPI): Promise<Space> => {
 	const id = process.env.VITE_CONTENTFUL_SPACE_ID;

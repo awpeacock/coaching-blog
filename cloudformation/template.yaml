@@ -1,0 +1,19 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3, CloudFront and Route 53'
+
+Parameters:
+    ProjectName:
+        Type: String
+        Default: 'BLOG'
+    BucketName:
+        Type: String
+        Default: 'blog'
+
+Resources:
+    WebsiteBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+            BucketName: !Sub '${BucketName}-site-${AWS::AccountId}'
+            WebsiteConfiguration:
+                IndexDocument: index.html
+                ErrorDocument: index.html
