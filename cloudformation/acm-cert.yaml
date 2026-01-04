@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ACM certificate setup for CloudFront (Route 53 or manual validation)'
+
+Parameters:
+    Domain:
+        Type: String
+        Description: 'The domain or subdomain to secure with ACM (e.g. blog.example.com)'
+    EnableRoute53:
+        Type: String
+        Default: 'false'
+        AllowedValues:
+            - 'true'
+            - 'false'
+        Description: 'Set to true to create DNS validation records automatically in Route 53'
+    HostedZoneId:
+        Type: String
+        Default: ''
+        Description: 'The Route 53 hosted zone ID for the domain (required if EnableRoute53=true)'
+
+Conditions:
+    UseRoute53: !Equals [!Ref EnableRoute53, 'true']
+
+Resources:
+    Certificate:
+        Type: AWS::CertificateManager::Certificate
+        Properties:
+            DomainName: !Ref Domain
+            ValidationMethod: DNS
+            DomainValidationOptions:
+                - DomainName: !Ref Domain
+                  HostedZoneId: !If
+                      - UseRoute53
+                      - !Ref HostedZoneId
+                      - !Ref 'AWS::NoValue'
+
+Outputs:
+    CertificateArn:
+        Description: 'ARN of the ACM certificate'
+        Value: !Ref Certificate

@@ -8,6 +8,25 @@ Parameters:
     BucketName:
         Type: String
         Default: 'blog'
+    Domain:
+        Type: String
+        Default: ''
+        Description: 'The public domain for the site.'
+    AcmCertificateArn:
+        Type: String
+        Default: ''
+        Description: 'The ARN of the ACM certificate in us-east-1 (Required for custom domain)'
+    EnableRoute53:
+        Type: String
+        Default: 'false'
+        AllowedValues:
+            - 'true'
+            - 'false'
+        Description: 'Set to true to create Route53 records for the blog subdomain'
+
+Conditions:
+    UseRoute53: !Equals [!Ref EnableRoute53, 'true']
+    UseCustomCert: !Not [!Equals [!Ref AcmCertificateArn, '']]
 
 Resources:
     WebsiteBucket:
@@ -52,6 +71,8 @@ Resources:
         Properties:
             DistributionConfig:
                 Enabled: true
+                Aliases:
+                    - !If [UseCustomCert, !Ref Domain, !Ref 'AWS::NoValue']
                 DefaultRootObject: index.html
                 Origins:
                     - Id: !Sub '${ProjectName}-S3Origin'
@@ -73,8 +94,40 @@ Resources:
                         Cookies:
                             Forward: none
                 ViewerCertificate:
-                    CloudFrontDefaultCertificate: true
+                    AcmCertificateArn: !If
+                        - UseCustomCert
+                        - !Ref AcmCertificateArn
+                        - !Ref 'AWS::NoValue'
+                    CloudFrontDefaultCertificate: !If
+                        - UseCustomCert
+                        - !Ref 'AWS::NoValue'
+                        - true
+                    SslSupportMethod: !If
+                        - UseCustomCert
+                        - sni-only
+                        - !Ref 'AWS::NoValue'
+                    MinimumProtocolVersion: !If
+                        - UseCustomCert
+                        - TLSv1.2_2021
+                        - !Ref 'AWS::NoValue'
                 PriceClass: PriceClass_100
+
+    Route53HostedZone:
+        Type: AWS::Route53::HostedZone
+        Condition: UseRoute53
+        Properties:
+            Name: !Ref Domain
+
+    Route53Record:
+        Type: AWS::Route53::RecordSet
+        Condition: UseRoute53
+        Properties:
+            HostedZoneId: !Ref Route53HostedZone
+            Name: !Ref Domain
+            Type: A
+            AliasTarget:
+                DNSName: !GetAtt WebsiteDistribution.DomainName
+                HostedZoneId: Z2FDTNDATAQYW2
 
 Outputs:
     CloudFrontDistributionId:
@@ -84,3 +137,13 @@ Outputs:
     CloudFrontDomainName:
         Description: 'The domain name of the CloudFront distribution'
         Value: !GetAtt WebsiteDistribution.DomainName
+
+    Route53NSRecords:
+        Description: 'Name servers for the Route53 hosted zone'
+        Condition: UseRoute53
+        Value: !Join [',', !GetAtt Route53HostedZone.NameServers]
+
+    Route53HostedZoneID:
+        Description: 'ID for the Route 53 hosted zone'
+        Condition: UseRoute53
+        Value: !Ref Route53HostedZone

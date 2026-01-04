@@ -2,11 +2,7 @@
 
 A very basic blog built in React (using Vite).
 
-At present, content is retrieved via Contentful (headless CMS), with a locally stored JSON fallback. Longer term, it is to be hosted on AWS (S3, Route53 and CloudFront via CloudFormation).
-
-## Status
-
-This project is in an early prototype phase - static content is built and deployed to S3, and made publicly accessible by CloudFront.
+Content is retrieved via Contentful (headless CMS), with a locally stored JSON fallback. Hosting is performed on AWS (S3, CloudFront and optionally Route53) and configured via CloudFormation.
 
 ## Setup
 
@@ -16,7 +12,7 @@ To install all dependencies, simply run:
 npm install
 ```
 
-### Local Development
+### Contentful
 
 To setup the Contentful instance, create an account, create a Content Management API (CMA) token and then add the following values to your .env file:
 
@@ -25,13 +21,54 @@ To setup the Contentful instance, create an account, create a Content Management
 - `VITE_CONTENTFUL_SPACE_ID` - If you have already created your Space, then add the ID (this will be added automatically if you allow setup to create it for you)
 - `VITE_CONTENTFUL_CONTENT_TYPE` - (Optional) Type name for all posts (defaults to "Blog Post") - only for readability for content administrators)
 
+### Domain Hosting
+
+You must set the domain name in your environment variables in order for CloudFront to successfully resolve it (and to produce a valid certificate):
+
+- `DOMAIN` - the full domain name (e.g. example.com or blog.example.com)
+
+> Note: The certificate MUST be generated in us-east-1 AWS region, this is a restriction imposed by Amazon.
+
+#### Route 53 (Optional)
+
+> Route 53 is optional - you can point your existing domain/subdomain directly to CloudFront if you prefer.
+
+1. To configure Route 53 to host your site, add the following to your .env file:
+    - `AWS_ENABLE_ROUTE53` - true if you want to use Route 53; false if you plan to use your own nameservers and point directly to CloudFront
+
+2. When you run the deployment script below, it will then output the NS records created as part of the Route 53 setup. Note these down.
+
+3. Login to your hosting provider's admin system.
+
+4. Navigate to DNS Management (usually under Domain > Manage DNS > DNS Management or something similar).
+
+5. Create new NS records for the domain/subdomain (there should be a separate record for each NS server provided by Route 53, so 4 in total):
+    - **Name:** www (if you plan on running the site under the main domain) or whatever your subdomain prefix is (i.e. for blog.example.com this will be "blog")
+    - **Type:** NS
+    - **Value:** One of the NS servers from your Route 53 output (repeat this step for all 4 servers)
+    - **TTL:** Choose the shortest option (e.g. 1/2 hour or 1800 seconds)
+
+6. Save changes.
+
+7. Verify the changes have worked using nslookup:
+
+    ```
+    nslookup blog.example.com
+    ```
+
+    > DNS propagation can take 5–30 minutes.
+
+8. Test in your browser once you have completed the [Build and Deployment](#build-and-deployment) steps (e.g. https://blog.example.com)
+
+### Initialising
+
 Once all the necessary variables have been set, execute the following command to setup your Contentful instance:
 
 ```
 npm run setup
 ```
 
-All of these steps _must_ be completed locally, before deploying remotely.
+All of these steps _must_ be completed locally before deploying remotely.
 
 ### Front-end Configuration
 
@@ -89,3 +126,12 @@ npm run deploy
 > The deployment script clears the bucket before upload and ensures correct MIME types.
 
 > The deployment script will read the generated values from the CloudFront generation and output the publicly accessible domain. You can use this value to preview the site.
+
+## Tearing Down
+
+If you need to completely remove this deployment, follow these steps carefully:
+
+1. **Empty the S3 bucket** – CloudFormation cannot delete a stack if the bucket contains objects.
+2. **Delete any CNAME records that have been created manually in Route 53 Hosted Zone** - Only the default A, NS, and SOA records are automatically removed when deleting the stack.
+3. **Delete the main stack** - You must delete the satck containing S3, CloudFront ( and optionally Route 53) resources first.
+4. **Delete the ACM certificate stack** - Only after all the above steps have successfully completed. Certificates cannot be deleted while still associated with a CloudFront distribution. _(Remember, this stack must live in us-east-1.)_

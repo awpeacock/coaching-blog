@@ -1,7 +1,7 @@
 {
 	"name": "coaching-blog",
 	"private": true,
-	"version": "0.0.5",
+	"version": "0.0.6",
 	"type": "module",
 	"scripts": {
 		"setup": "npm run setup:cms && npm run setup:aws",
