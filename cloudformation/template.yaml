@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'S3, CloudFront and Route 53'
+Description: 'S3, CloudFront and (optionally) Route 53'
 
 Parameters:
     ProjectName:

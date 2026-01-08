@@ -27,11 +27,12 @@ Resources:
             DomainName: !Ref Domain
             ValidationMethod: DNS
             DomainValidationOptions:
-                - DomainName: !Ref Domain
-                  HostedZoneId: !If
-                      - UseRoute53
-                      - !Ref HostedZoneId
-                      - !Ref 'AWS::NoValue'
+                - !If
+                  - UseRoute53
+                  - DomainName: !Ref Domain
+                    HostedZoneId: !Ref HostedZoneId
+                  - DomainName: !Ref Domain
+                    ValidationDomain: !Ref Domain
 
 Outputs:
     CertificateArn:

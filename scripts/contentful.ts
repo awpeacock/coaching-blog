@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import * as fs from 'node:fs';
 import path from 'node:path';
 
-import { heading, info, log, success, warn, fail } from './funcs';
+import { title, heading, info, log, success, warn, fail } from './funcs';
 
 dotenv.config();
 
@@ -59,7 +59,7 @@ const resolveContentType = async (space: Space): Promise<ContentType> => {
 	try {
 		const existing = await environment.getContentType('blog-post');
 		if (existing) {
-			info(`Content Type "${existing.name}" exists`);
+			log(`Content Type "${existing.name}" already exists`);
 			if (existing.sys.publishedVersion) {
 				return existing;
 			}
@@ -121,9 +121,8 @@ const resolveContentType = async (space: Space): Promise<ContentType> => {
 	return published;
 };
 
-heading('Setting up Contentful Space and Content Model');
+title('Setting up Contentful Space and Content Model');
 
-// Validate all necessary environment variables are present
 if (!process.env.CONTENTFUL_MANAGEMENT_TOKEN) {
 	fail('No CMA token provided');
 }
@@ -138,5 +137,7 @@ const client = contentful.createClient({
 	accessToken: process.env.CONTENTFUL_MANAGEMENT_TOKEN!,
 });
 
+heading('Creating or retrieving existing Space');
 const space = await resolveSpace(client);
+heading('Creating Content Model (if not already existing)');
 await resolveContentType(space);

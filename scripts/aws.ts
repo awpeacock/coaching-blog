@@ -1,4 +1,9 @@
 import {
+	ACMClient,
+	DescribeCertificateCommand,
+	ListCertificatesCommand,
+} from '@aws-sdk/client-acm';
+import {
 	CloudFormationClient,
 	CreateStackCommand,
 	UpdateStackCommand,
@@ -14,7 +19,7 @@ import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { heading, info, log, success, fail } from './funcs';
+import { title, heading, info, log, success, fail, dump } from './funcs';
 
 interface Details {
 	cloudfront: {
@@ -22,46 +27,61 @@ interface Details {
 		domain: string;
 	};
 	route53: {
+		ns?: string;
 		zone?: string;
 	};
 }
 
 dotenv.config();
 
+// Store the details to output to the user for configuring their hosting provider's DNS records
+const output = new Map<string, string>();
+
 const deploy = async (
 	client: CloudFormationClient,
 	stack: string,
 	input: CreateStackCommandInput,
+	wait?: boolean,
 ): Promise<void> => {
 	try {
 		log('Deploying stack...');
 		let create = true;
 		await client.send(new CreateStackCommand(input)).catch(async (e) => {
 			if (e.name === 'AlreadyExistsException') {
-				info('Stack exists, updating...');
-				create = false;
-				await client.send(new UpdateStackCommand(input));
+				if (phase === 'init') {
+					log(
+						'Stack exists, skipping (recreating the stack in init phase can break the site...',
+					);
+					return;
+				}
+				if (phase === 'finalise') {
+					log('Stack exists, updating...');
+					create = false;
+					await client.send(new UpdateStackCommand(input));
+				}
 			} else {
 				throw e;
 			}
 		});
 		success('Deployment initiated');
-		if (create) {
-			await waitUntilStackCreateComplete(
-				{ client: client, maxWaitTime: 1800 },
-				{ StackName: stack },
-			);
-		} else {
-			await waitUntilStackUpdateComplete(
-				{ client: client, maxWaitTime: 1800 },
-				{ StackName: stack },
-			);
+		if (wait === undefined || wait === true) {
+			if (create) {
+				await waitUntilStackCreateComplete(
+					{ client: client, maxWaitTime: 1800 },
+					{ StackName: stack },
+				);
+			} else {
+				await waitUntilStackUpdateComplete(
+					{ client: client, maxWaitTime: 1800 },
+					{ StackName: stack },
+				);
+			}
+			success('Deployment completed');
 		}
-		success('Deployment completed');
 	} catch (e) {
 		const err = e as Error;
 		if (err.message.includes('No updates are to be performed')) {
-			info('No updates were required');
+			log('No updates were required');
 		} else {
 			fail('Deployment failed', e as Error);
 		}
@@ -105,22 +125,15 @@ const getDetails = async (
 			domain,
 		},
 		route53: {
+			ns,
 			zone,
 		},
 	};
 
-	info(`CloudFront Distribution ID: ${details.cloudfront.id}`);
-	info(`CloudFront Domain: ${details.cloudfront.domain}`);
-	if (ns) {
-		info(`Route 53 NS Records: ${ns}`);
-	}
-	if (zone) {
-		info(`Route 53 Hosted Zone ID: ${zone}`);
-	}
 	return details;
 };
 
-const writeDetails = (details: Details): void => {
+const writeDetails = (details: Details, domain: string): void => {
 	const isCI = !!process.env.GITHUB_ACTIONS;
 
 	if (isCI) {
@@ -164,13 +177,36 @@ const writeDetails = (details: Details): void => {
 	success(
 		'Environment variables successfully updated with CloudFront details',
 	);
+
+	info(`CloudFront Distribution ID: ${details.cloudfront.id}`);
+	info(`CloudFront Domain: ${details.cloudfront.domain}`);
+	if (details.route53?.ns) {
+		const ns = details.route53.ns
+			.split(',')
+			.map((r) => r.trim())
+			.filter(Boolean);
+		for (let n = 0; n < ns.length; n++) {
+			output.set('DNS Record Type (' + (n + 1) + ')', 'NS');
+			output.set(
+				'DNS Record Name (' + (n + 1) + ')',
+				domain.substring(0, domain.indexOf('.')),
+			);
+			output.set('DNS Record Value (' + (n + 1) + ')', ns[n]);
+		}
+	}
+	if (details.route53?.zone) {
+		info(`Route 53 Hosted Zone ID: ${details.route53.zone}`);
+	}
 };
 
 const createACM = async (
 	stack: string,
 	route53: boolean,
 	zone?: string,
-): Promise<string> => {
+): Promise<void> => {
+	if (route53 && !zone) {
+		throw new Error('Route53 enabled but Hosted Zone ID is missing');
+	}
 	const template = fs.readFileSync('./cloudformation/acm-cert.yaml', 'utf8');
 	const client = new CloudFormationClient({
 		region: 'us-east-1',
@@ -200,23 +236,118 @@ const createACM = async (
 		Capabilities: ['CAPABILITY_NAMED_IAM'],
 		Parameters: params,
 	};
-	await deploy(client, stack, input);
-
-	const { Stacks } = await client.send(
-		new DescribeStacksCommand({ StackName: stack }),
-	);
-	const arn = Stacks?.[0]?.Outputs?.find(
-		(o) => o.OutputKey === 'CertificateArn',
-	)?.OutputValue;
-	if (!arn) {
-		throw new Error('Unable to retrieve ACM Certificate ARN');
-	}
-	info(`ACM Certificate ARN: ${arn}`);
-
-	return arn;
+	await deploy(client, stack, input, false);
 };
 
-heading('Setting up AWS S3, CloudFront and (optionally) Route 53');
+const getCertificateArnByStack = async (stack: string): Promise<string> => {
+	const client = new CloudFormationClient({
+		region: 'us-east-1',
+	});
+
+	// Keep trying every minute for half an hour (if it hasn't been generated in that time, we likely have a problem)
+	for (let retry = 0; retry < 30; retry++) {
+		const { Stacks } = await client.send(
+			new DescribeStacksCommand({ StackName: stack }),
+		);
+
+		const arn = Stacks?.[0]?.Outputs?.find(
+			(o) => o.OutputKey === 'CertificateArn',
+		)?.OutputValue;
+		if (arn) {
+			return arn;
+		}
+
+		log(
+			`Trying to retrieve ACM Certificate ARN by Stack... (Attempt ${retry + 1})`,
+		);
+		await new Promise((t) => setTimeout(t, 60000));
+	}
+	throw new Error('Unable to retrieve ACM Certificate ARN');
+};
+
+const getCertificateArnByDomain = async (domain: string): Promise<string> => {
+	const client = new ACMClient({ region: 'us-east-1' });
+
+	// Keep trying every minute for half an hour (if it hasn't been generated in that time, we likely have a problem)
+	for (let retry = 0; retry < 30; retry++) {
+		const list = await client.send(
+			new ListCertificatesCommand({
+				CertificateStatuses: ['PENDING_VALIDATION', 'ISSUED'],
+			}),
+		);
+
+		const cert = list.CertificateSummaryList?.find(
+			(c) => c.DomainName === domain,
+		);
+
+		if (cert?.CertificateArn) {
+			return cert.CertificateArn;
+		}
+
+		log(
+			`Trying to retrieve ACM Certificate ARN by Domain... (Attempt ${retry + 1})`,
+		);
+		await new Promise((t) => setTimeout(t, 60000));
+	}
+	throw new Error('Unable to retrieve ACM Certificate ARN');
+};
+
+const getValidationRecords = async (
+	arn: string,
+	details: Details,
+): Promise<void> => {
+	const client = new ACMClient({ region: 'us-east-1' });
+
+	const { Certificate } = await client.send(
+		new DescribeCertificateCommand({ CertificateArn: arn }),
+	);
+
+	if (!Certificate?.DomainValidationOptions) {
+		throw new Error('No validation options found for certificate');
+	}
+
+	Certificate.DomainValidationOptions.forEach((opt) => {
+		if (opt.DomainName && opt.ResourceRecord) {
+			output.set('DNS Record Type (1)', opt.ResourceRecord.Type!);
+			output.set(
+				'DNS Record Name (1)',
+				opt.DomainName.substring(0, opt.DomainName.indexOf('.')),
+			);
+			output.set('DNS Record Value (1)', details.cloudfront.domain);
+			output.set('DNS Record Type (2)', opt.ResourceRecord.Type!);
+			output.set('DNS Record Name (2)', opt.ResourceRecord.Name!);
+			output.set('DNS Record Value (2)', opt.ResourceRecord.Value!);
+		}
+	});
+};
+
+const getCertificate = async (arn: string): Promise<void> => {
+	const client = new ACMClient({ region: 'us-east-1' });
+
+	// Again, keep trying every minute for half an hour
+	for (let retry = 0; retry < 30; retry++) {
+		const { Certificate } = await client.send(
+			new DescribeCertificateCommand({ CertificateArn: arn }),
+		);
+
+		if (Certificate?.Status === 'ISSUED') {
+			success('Certificate issued');
+			return;
+		}
+
+		if (Certificate?.Status !== 'PENDING_VALIDATION') {
+			throw new Error(
+				`Certificate failed with status ${Certificate?.Status}`,
+			);
+		}
+
+		log(`Waiting for certificate validation... (Retry ${retry})`);
+		await new Promise((t) => setTimeout(t, 60000));
+	}
+	throw new Error('Certificate still pending validation');
+};
+
+title('Setting up AWS S3, CloudFront and (optionally) Route 53');
 
 const template = fs.readFileSync('./cloudformation/template.yaml', 'utf8');
 
@@ -230,6 +361,16 @@ const config = {
 
 if (!config.region || !config.stack || !config.domain) {
 	fail('Missing environment variables. Check .env or GitHub secrets.');
+}
+
+const arg = process.argv.find((a) => a.startsWith('-phase'));
+const phase = arg?.split('=')[1];
+
+if (phase !== 'init' && phase !== 'finalise') {
+	fail(
+		'You must select which phase of the hosting setup you are running. ' +
+			'Run with -phase=init, configure DNS on your hosting provider, then rerun with -phase=finalise.',
+	);
 }
 
 const client = new CloudFormationClient({
@@ -249,17 +390,15 @@ if (config.project) {
 		},
 	];
 }
+params.push({
+	ParameterKey: 'Domain',
+	ParameterValue: config.domain,
+});
 if (config.route53 !== undefined) {
 	params.push({
 		ParameterKey: 'EnableRoute53',
 		ParameterValue: config.route53,
 	});
-	if (config.route53 === 'true') {
-		params.push({
-			ParameterKey: 'Domain',
-			ParameterValue: config.domain,
-		});
-	}
 }
 
 const input: CreateStackCommandInput = {
@@ -269,40 +408,56 @@ const input: CreateStackCommandInput = {
 	Parameters: params,
 };
 
+info(`Public Domain: ${config.domain}`);
 info(`AWS Region: ${config.region}`);
 info(`AWS Stack Name: ${config.stack}`);
 if (config.project) {
 	info(`AWS Project Name: ${config.project}`);
 }
 info(`Is Route 53 enabled? ${config.route53 === 'true'}`);
-if (config.domain) {
-	info(`Public Domain: ${config.domain}`);
-}
 
 try {
-	heading('Initial deployment of main stack');
-	await deploy(client, config.stack!, input);
+	if (phase === 'init') {
+		heading('Initial deployment of main stack');
+		await deploy(client, config.stack!, input);
 
-	const details = await getDetails(client, config.stack!);
-	writeDetails(details);
+		const details = await getDetails(client, config.stack!);
+		writeDetails(details, config.domain!);
 
-	heading('Deployment of ACM certificate');
-	const cert = await createACM(
-		config.stack! + '-ACM-Cert',
-		config.route53 === 'true',
-		details.route53.zone,
-	);
+		heading('Deployment of ACM certificate');
+		await createACM(
+			config.stack! + '-ACM-Cert',
+			config.route53 === 'true',
+			details.route53.zone,
+		);
 
-	heading('Redeploying main stack and injecting certificate into CloudFront');
-	const revised = [
-		...params,
-		{ ParameterKey: 'AcmCertificateArn', ParameterValue: cert },
-	];
+		if (config.route53 !== 'true') {
+			const cert = await getCertificateArnByDomain(config.domain!);
+			await getValidationRecords(cert, details);
+		}
 
-	await deploy(client, config.stack!, {
-		...input,
-		Parameters: revised,
-	});
+		dump(output);
+	}
+
+	if (phase === 'finalise') {
+		heading('Verification of ACM certificate');
+		const cert = await getCertificateArnByStack(
+			config.stack! + '-ACM-Cert',
+		);
+		await getCertificate(cert);
+
+		heading(
+			'Redeploying main stack and injecting certificate into CloudFront',
+		);
+		const revised = [
+			...params,
+			{ ParameterKey: 'AcmCertificateArn', ParameterValue: cert },
+		];
+		await deploy(client, config.stack!, {
+			...input,
+			Parameters: revised,
+		});
+	}
 } catch (e) {
 	fail('Failed to deploy', e as Error);
 }

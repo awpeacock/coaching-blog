@@ -14,7 +14,7 @@ import { lookup } from 'mime-types';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 
-import { heading, info, log, success, fail } from './funcs';
+import { title, heading, info, log, success, fail } from './funcs';
 
 dotenv.config();
 
@@ -76,7 +76,7 @@ const clearCache = async (cf: CloudFrontClient, id: string) => {
 	);
 };
 
-heading('Uploading React site to S3');
+title('Deploying React site to S3 and clearing CloudFront cache');
 
 const config = {
 	region: process.env.AWS_REGION,
@@ -89,25 +89,21 @@ if (!config.region || !config.project || !config.cloudfront) {
 }
 
 const sts = new STSClient({ region: config.region });
-
 const accountId = await getAccountId(sts);
-
 const bucket = `${config.project.toLowerCase()}-site-${accountId}`;
+
+info(`CloudFront Distribution ID: ${config.cloudfront}`);
 info(`S3 Bucket Name: ${bucket}`);
 
+heading('Uploading latest build to S3');
 const s3 = new S3Client({ region: config.region });
-
 log('Emptying bucket...');
 await empty(s3, bucket);
-
 log('Uploading new build...');
 await upload(s3, bucket, 'dist');
-
 success('S3 bucket successfully updated');
 
+heading('Clearing CloudFront cache');
 const cf = new CloudFrontClient({ region: config.region });
-info(`CloudFront Distribution ID: ${config.cloudfront}`);
-
 await clearCache(cf, config.cloudfront!);
-
 success('CloudFront Cache cleared');
