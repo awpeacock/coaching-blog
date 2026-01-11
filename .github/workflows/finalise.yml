@@ -1,0 +1,55 @@
+name: 2) Finalise AWS Setup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  AWS_STACK: ${{ vars.AWS_STACK }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  DOMAIN: ${{ vars.DOMAIN }}
+
+jobs:
+  check-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if Setup was successful
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Confirm the initialise step has successfully run
+          LAST_RUN_STATUS=$(gh run list --workflow "initialise.yml" --limit 1 --json conclusion --template '{{range .}}{{.conclusion}}{{end}}')
+          
+          if [ "$LAST_RUN_STATUS" != "success" ]; then
+            echo "Error: No successful initial setup found (Status: $LAST_RUN_STATUS)."
+            echo "Please run the 'initialise' workflow first."
+            exit 1
+          fi
+
+  finalise:
+    needs: check-setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Complete CloudFormation setup
+        run: npm run setup:aws -- -phase=finalise
+
+  deploy:
+    needs: finalise
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+      

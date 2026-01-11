@@ -1,0 +1,43 @@
+name: 1) Initial Contentful and AWS Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Setup Contentful
+        env:
+          VITE_CONTENTFUL_SPACE_ID: ${{ secrets.CONTENTFUL_SPACE_ID }}
+          VITE_CONTENTFUL_CONTENT_TYPE: ${{ vars.CONTENTFUL_CONTENT_TYPE }}
+          CONTENTFUL_MANAGEMENT_TOKEN: ${{ secrets.CONTENTFUL_MANAGEMENT_TOKEN }}
+          CONTENTFUL_SPACE_NAME: ${{ vars.CONTENTFUL_SPACE_NAME }}
+        run: npm run setup:cms
+
+      - name: Initial CloudFormation setup
+        env:
+          AWS_STACK: ${{ vars.AWS_STACK }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_PROJECT_NAME: ${{ vars.AWS_PROJECT_NAME }}
+          DOMAIN: ${{ vars.DOMAIN }}
+        run: npm run setup:aws -- -phase=init
+
+      - name: Add CloudFront Distribution ID to secrets
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh secret set CLOUDFRONT_DISTRIBUTION_ID < cloudfront.txt
+          rm cloudfront.txt
+

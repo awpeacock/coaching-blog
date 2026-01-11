@@ -80,7 +80,7 @@ title('Deploying React site to S3 and clearing CloudFront cache');
 
 const config = {
 	region: process.env.AWS_REGION,
-	project: process.env.AWS_PROJECT_NAME ?? 'BLOG',
+	project: process.env.AWS_PROJECT_NAME || 'BLOG',
 	cloudfront: process.env.CLOUDFRONT_DISTRIBUTION_ID,
 };
 

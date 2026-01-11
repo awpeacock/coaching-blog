@@ -17,7 +17,6 @@ import type {
 } from '@aws-sdk/client-cloudformation';
 import dotenv from 'dotenv';
 import fs from 'node:fs';
-import path from 'node:path';
 
 import { title, heading, info, log, success, fail, dump } from './funcs';
 
@@ -134,51 +133,6 @@ const getDetails = async (
 };
 
 const writeDetails = (details: Details, domain: string): void => {
-	const isCI = !!process.env.GITHUB_ACTIONS;
-
-	if (isCI) {
-		fs.appendFileSync(
-			process.env.GITHUB_ENV!,
-			`CLOUDFRONT_DISTRIBUTION_ID=${details.cloudfront.id}\n`,
-		);
-		fs.appendFileSync(
-			process.env.GITHUB_ENV!,
-			`CLOUDFRONT_DOMAIN=${details.cloudfront.domain}\n`,
-		);
-	} else {
-		const file = path.resolve('.env');
-		if (!fs.existsSync(file)) {
-			fail('.env file not found');
-		}
-
-		const resolve = (
-			lines: Array<string>,
-			key: string,
-			value: string,
-		): Array<string> => {
-			const index = lines.findIndex((line) => line.startsWith(`${key}=`));
-			if (index === -1) {
-				lines.push(`${key}=${value}`);
-			} else {
-				lines[index] = `${key}=${value}`;
-			}
-			return lines;
-		};
-
-		let vars = fs.readFileSync(file, 'utf8').split('\n');
-		vars = resolve(
-			vars,
-			'CLOUDFRONT_DISTRIBUTION_ID',
-			details.cloudfront.id,
-		);
-		vars = resolve(vars, 'CLOUDFRONT_DOMAIN', details.cloudfront.domain);
-		fs.writeFileSync(file, vars.join('\n').trim() + '\n');
-	}
-	success(
-		'Environment variables successfully updated with CloudFront details',
-	);
-
-	info(`CloudFront Distribution ID: ${details.cloudfront.id}`);
 	info(`CloudFront Domain: ${details.cloudfront.domain}`);
 	if (details.route53?.ns) {
 		const ns = details.route53.ns
@@ -354,7 +308,7 @@ const template = fs.readFileSync('./cloudformation/template.yaml', 'utf8');
 const config = {
 	region: process.env.AWS_REGION,
 	stack: process.env.AWS_STACK,
-	project: process.env.AWS_PROJECT_NAME,
+	project: process.env.AWS_PROJECT_NAME || 'BLOG',
 	route53: process.env.AWS_ENABLE_ROUTE53,
 	domain: process.env.DOMAIN,
 };
@@ -436,7 +390,12 @@ try {
 			await getValidationRecords(cert, details);
 		}
 
+		// If running on a public repo, do NOT execute the following line!
 		dump(output);
+
+		if (process.env.CI) {
+			fs.writeFileSync('cloudfront.txt', details.cloudfront.id, 'utf8');
+		}
 	}
 
 	if (phase === 'finalise') {

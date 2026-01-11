@@ -143,6 +143,55 @@ npm run deploy
 
 The deployment script clears the bucket before upload and ensures correct MIME types.
 
+## CI/CD
+
+This project is setup to be automated (as far as possible) by GitHub Actions. To do so, first you must add the necessary secrets and variables to your repository via **Project Settings > Secrets and variables > Actions**:
+
+| Secrets                     | Variables               |
+| --------------------------- | ----------------------- |
+| AWS_ACCESS_KEY_ID           | AWS_STACK               |
+| AWS_REGION                  | CONTENTFUL_CONTENT_TYPE |
+| AWS_SECRET_ACCESS_KEY       | CONTENTFUL_SPACE_NAME   |
+| CONTENTFUL_DELIVERY_TOKEN   | DOMAIN                  |
+| CONTENTFUL_MANAGEMENT_TOKEN |                         |
+| CONTENTFUL_SPACE_ID         |                         |
+
+As the pipeline needs to update secrets as part of the setup, you also need to create a **Personal Access Token** -
+
+1. Go to your **GitHub profile > Developer Settings > Personal access tokens > Fine-grained tokens**
+2. Click "Generate new token"
+3. Name it appropriately (e.g. "Blog Pipeline Token")
+4. Choose "Only select repositories" and select the repo for this project
+5. Grant "Read and Write" access to secrets
+6. Copy the token and add it to secrets as `PAT_TOKEN`
+
+### Running the Workflows
+
+The workflows must be run sequentially:
+
+**1) Initial Contentful and AWS Setup**
+
+- Trigger this workflow first.
+- It will create the initial AWS resources and output the DNS records you need to configure with your hosting provider.
+- Manual DNS configuration is required before continuing; otherwise the finalise step may timeout.
+- **Important**: Remember, some DNS providers require the full hostname (e.g. \_12345abcde.blog.example.com), while others only require the relative name (e.g. \_12345abcde.blog). Follow your provider's guidance.
+
+**2) Finalise AWS Setup**
+
+- After configuring DNS, run this workflow to complete the AWS setup.
+- This workflow also triggers the deployment workflow automatically for an initial upload of the site.
+
+**3) Deploy React App**
+
+- Once the first two steps have completed, this workflow can be triggered anytime to deploy changes to the front-end.
+
+> **Important**:
+>
+> - The initial pipeline outputs DNS records to the logs - this will be exposed publicly in a public repository, so it is recommended you either run these workflows in a private repo, or remove that output and manually retrieve the values from the AWS console.
+> - Contentful setup must be completely locally before running.
+> - The finalise and deploy workflows check that the required previous steps have successfully run, and will not run otherwise.
+> - DNS propagation can sometimes take longer than expected; if the site doesn’t work immediately after manual DNS changes, wait a while and retry the finalise workflow.
+
 ## Tearing Down
 
 If you need to completely remove this deployment, follow these steps carefully:

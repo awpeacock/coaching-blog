@@ -48,7 +48,7 @@ const resolveSpace = async (client: ClientAPI): Promise<Space> => {
 };
 
 const resolveContentType = async (space: Space): Promise<ContentType> => {
-	const name = process.env.VITE_CONTENTFUL_CONTENT_TYPE ?? 'Blog Post';
+	const name = process.env.VITE_CONTENTFUL_CONTENT_TYPE || 'Blog Post';
 
 	const environment: Environment = await space.getEnvironment('master');
 	if (!environment) {
