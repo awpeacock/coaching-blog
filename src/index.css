@@ -14,7 +14,7 @@ small,
 footer {
 	font-family: 'DM Sans', sans-serif;
 	font-optical-sizing: auto;
-	font-weight: 200;
+	font-weight: 300;
 	font-style: normal;
 	padding-left: 20px;
 	padding-right: 20px;
@@ -32,6 +32,10 @@ h1 {
 h2 {
 	margin-top: 0;
 	margin-bottom: 0;
+}
+
+strong {
+	font-weight: 600;
 }
 
 a {
@@ -90,7 +94,7 @@ footer ul li {
 	top: 0;
 	left: 10%;
 	background-color: #fff;
-	opacity: 0.75;
+	opacity: 0.85;
 	width: 80vw;
 	height: 100vh;
 	margin-top: 0;

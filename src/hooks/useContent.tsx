@@ -28,7 +28,8 @@ const parse = (doc: Document): Array<string> =>
 		.flatMap((paragraph) =>
 			paragraph.content
 				.filter((c): c is Text => c.nodeType === 'text')
-				.map((t) => t.value),
+				.map((t) => t.value)
+				.join(''),
 		);
 
 export const useContent = () => {

@@ -93,6 +93,15 @@ Resources:
                         QueryString: false
                         Cookies:
                             Forward: none
+                CustomErrorResponses:
+                    - ErrorCode: 403
+                      ResponsePagePath: /index.html
+                      ResponseCode: 200
+                      ErrorCachingMinTTL: 0
+                    - ErrorCode: 404
+                      ResponsePagePath: /index.html
+                      ResponseCode: 200
+                      ErrorCachingMinTTL: 0
                 ViewerCertificate:
                     AcmCertificateArn: !If
                         - UseCustomCert
